@@ -1,7 +1,9 @@
+import { NotFoundException } from '@nestjs/common';
 import { Test, TestingModule } from '@nestjs/testing';
 import { getRepositoryToken } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { CreateTodoDto } from './dto/create-todo.dto';
+import { UpdateTodoDto } from './dto/update-todo.dto';
 import { TodoEntity } from './entities/todo.entity';
 import { TodoService } from './todo.service';
 
@@ -12,10 +14,7 @@ const todoEntityList: TodoEntity[] = [
   new TodoEntity({ task: 'ta4', isDone: 0 }),
 ];
 
-const newTodoEntity: TodoEntity = new TodoEntity({
-  task: 'Criar task',
-  isDone: 1,
-});
+const updateTodoEntity = new TodoEntity({ task: 'ta1', isDone: 0 });
 
 describe('TodoService', () => {
   let todoService: TodoService;
@@ -30,10 +29,10 @@ describe('TodoService', () => {
           useValue: {
             find: jest.fn().mockResolvedValue(todoEntityList),
             findOneBy: jest.fn().mockResolvedValue(todoEntityList[0]),
-            create: jest.fn().mockResolvedValue(newTodoEntity),
-            save: jest.fn(),
-            softDelete: jest.fn(),
-            merge: jest.fn(),
+            create: jest.fn().mockReturnValue(todoEntityList[0]), //Return não resolve pq ele retorna uma entidade
+            save: jest.fn().mockResolvedValue(todoEntityList[0]),
+            softDelete: jest.fn().mockReturnValue(undefined),
+            merge: jest.fn().mockReturnValue(updateTodoEntity), // recebe uma entidade e um dado e mergeia
           },
         },
       ],
@@ -78,20 +77,102 @@ describe('TodoService', () => {
         .spyOn(todoRepository, 'findOneBy')
         .mockRejectedValueOnce(new Error());
 
-      expect(todoService.findOne(1)).rejects.toThrow();
+      expect(todoService.findOne(1)).rejects.toThrowError(NotFoundException);
     });
   });
 
-  /*describe('create', () => {
+  describe('create', () => {
     it('should create a todo Entity succefully', async () => {
       const body: CreateTodoDto = {
-        task: 'Criar task',
+        task: 'ta1',
         isDone: 1,
       };
 
       const result = await todoService.create(body);
 
-      expect(result).toEqual(newTodoEntity);
+      expect(result).toEqual(todoEntityList[0]); // Epero q ele me retorne uma entidade
+      expect(todoRepository.create).toHaveBeenCalledTimes(1);
+      expect(todoRepository.save).toHaveBeenCalledTimes(1);
+      expect(todoRepository.create).toHaveBeenCalledWith(body);
+      expect(todoRepository.save).toHaveBeenCalledWith(body);
     });
-  });*/
+
+    it('should throw an exception', () => {
+      const body: CreateTodoDto = {
+        task: 'ta1',
+        isDone: 1,
+      };
+
+      jest.spyOn(todoRepository, 'save').mockRejectedValueOnce(new Error());
+
+      expect(todoService.create(body)).rejects.toThrow();
+    });
+  });
+
+  describe('update', () => {
+    it('should to update a todo item', async () => {
+      const body: UpdateTodoDto = {
+        task: 'ta1',
+        isDone: 0,
+      };
+
+      jest
+        .spyOn(todoRepository, 'save') // Como já fiz o mock do save eu faço esse aqui
+        .mockResolvedValueOnce(updateTodoEntity); // mockou aqui pq o save já tá definido
+
+      const result = await todoService.update(1, body);
+
+      expect(result).toEqual(updateTodoEntity);
+      expect(todoRepository.merge).toHaveBeenCalledTimes(1);
+    });
+
+    it('should throw an exception', () => {
+      const body: UpdateTodoDto = {
+        task: 'ta1',
+        isDone: 0,
+      };
+
+      jest
+        .spyOn(todoRepository, 'findOneBy')
+        .mockRejectedValueOnce(new Error());
+
+      expect(todoService.update(1, body)).rejects.toThrow();
+    });
+
+    it('should throw an exeption', () => {
+      const body: UpdateTodoDto = {
+        task: 'ta1',
+        isDone: 0,
+      };
+
+      jest.spyOn(todoRepository, 'save').mockRejectedValueOnce(new Error());
+
+      expect(todoService.update(1, body)).rejects.toThrowError();
+    });
+  });
+
+  describe('delete', () => {
+    it('should delette a todo entity succefully', async () => {
+      const result = await todoService.delete(1);
+
+      expect(result).toBeUndefined();
+      expect(todoRepository.softDelete).toHaveBeenCalledTimes(1);
+    });
+
+    it('should throw an exeption', async () => {
+      jest
+        .spyOn(todoRepository, 'softDelete')
+        .mockRejectedValueOnce(new Error());
+
+      expect(todoService.delete(1)).rejects.toThrowError();
+    });
+
+    it('should a not found todo entity', () => {
+      jest
+        .spyOn(todoRepository, 'findOneBy')
+        .mockRejectedValueOnce(new Error());
+
+      expect(todoService.delete(1)).rejects.toThrowError();
+    });
+  });
 });
