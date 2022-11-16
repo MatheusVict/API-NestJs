@@ -14,8 +14,8 @@ export class TodoService {
   ) {}
 
   async findAll() {
-    return await this.todoRepository.find();
-  }
+    return await this.todoRepository.find({ order: { createdAt: 'DESC' } });
+  } // To defindo a ordem q quero resgatar, passando a coluna base e em q ordem
 
   async findOne(id: number) {
     try {
